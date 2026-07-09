@@ -7,8 +7,7 @@ consistent when many requests are processed at once.
 import threading
 import time
 
-_email_lock = threading.Lock()
-_audit_lock = threading.Lock()
+_notification_lock = threading.Lock()
 
 
 def _send_email(kind: str, booking) -> None:
@@ -22,14 +21,12 @@ def _write_audit(kind: str, booking) -> None:
 
 
 def notify_created(booking) -> None:
-    with _email_lock:
+    with _notification_lock:
         _send_email("created", booking)
-        with _audit_lock:
-            _write_audit("created", booking)
+        _write_audit("created", booking)
 
 
 def notify_cancelled(booking) -> None:
-    with _audit_lock:
+    with _notification_lock:
         _write_audit("cancelled", booking)
-        with _email_lock:
-            _send_email("cancelled", booking)
+        _send_email("cancelled", booking)

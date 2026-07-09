@@ -5,6 +5,7 @@ import io
 from sqlalchemy.orm import Session
 
 from ..models import Booking, Room
+from ..errors import AppError
 from ..timeutils import iso_utc
 
 EXPORT_HEADER = [
@@ -17,18 +18,6 @@ EXPORT_HEADER = [
     "status",
     "price_cents",
 ]
-
-
-def fetch_bookings_raw(db: Session, room_id: int) -> list[Booking]:
-    """Load every booking for a single room, ordered by id."""
-    return (
-        db.query(Booking)
-        .filter(Booking.room_id == room_id)
-        .order_by(Booking.id.asc())
-        .all()
-    )
-
-
 def _fetch_scoped(db: Session, org_id: int, user_id: int | None, room_id: int | None) -> list[Booking]:
     query = db.query(Booking).join(Room).filter(Room.org_id == org_id)
     if user_id is not None:
@@ -38,6 +27,13 @@ def _fetch_scoped(db: Session, org_id: int, user_id: int | None, room_id: int | 
     return query.order_by(Booking.id.asc()).all()
 
 
+def _get_org_room(db: Session, org_id: int, room_id: int) -> Room:
+    room = db.query(Room).filter(Room.id == room_id, Room.org_id == org_id).first()
+    if room is None:
+        raise AppError(404, "ROOM_NOT_FOUND", "Room not found")
+    return room
+
+
 def generate_export(
     db: Session,
     org_id: int,
@@ -45,11 +41,11 @@ def generate_export(
     room_id: int | None,
     include_all: bool,
 ) -> str:
+    if room_id is not None:
+        _get_org_room(db, org_id, room_id)
+
     if include_all:
-        if room_id is not None:
-            rows = fetch_bookings_raw(db, room_id)
-        else:
-            rows = _fetch_scoped(db, org_id, None, None)
+        rows = _fetch_scoped(db, org_id, None, room_id)
     else:
         rows = _fetch_scoped(db, org_id, user_id, room_id)
 
